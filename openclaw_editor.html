@@ -123,9 +123,9 @@
 
     <div class="main-content">
       <div class="card-shell form-wrap active" id="formWrap">
-        <div class="section-title"><i class="bi bi-braces-asterisk"></i> Agents智能体配置</div>
+        <div class="section-title" id="formTitle"><i class="bi bi-braces-asterisk"></i> Agents智能体配置</div>
         <hr>
-        <div class="row g-3">
+        <div class="row g-3 form-section active" id="section-agents">
           <div class="col-md-6">
             <label class="form-label fw-semibold">主模型 (primary) *</label>
             <input id="modelPrimary" class="form-control" placeholder="anthropic/claude-opus-4-5">
@@ -136,7 +136,6 @@
             <textarea id="modelFallbacks" rows="3" class="form-control" placeholder="openai/gpt-5.2\ngoogle/gemini-2.0"></textarea>
             <div class="help-text">每行一个备用模型</div>
           </div>
-
           <div class="col-md-6">
             <label class="form-label fw-semibold">工作空间 (workspace) *</label>
             <input id="workspace" class="form-control" placeholder="~/.openclaw/workspace">
@@ -150,7 +149,42 @@
               <option value="high" selected>高 (high)</option>
             </select>
           </div>
+        </div>
 
+        <div class="row g-3 form-section" id="section-channels" style="display:none;">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Telegram Token</label>
+            <input id="tgToken" class="form-control" placeholder="123456:ABCDEF...">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Telegram Chat ID</label>
+            <input id="tgChatId" class="form-control" placeholder="-100xxxxxxxxxx">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Discord Webhook</label>
+            <input id="discordWebhook" class="form-control" placeholder="https://discord.com/api/webhooks/...">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">WhatsApp API URL</label>
+            <input id="waApiUrl" class="form-control" placeholder="https://api.whatsapp.example/send">
+          </div>
+        </div>
+
+        <div class="row g-3 form-section" id="section-models" style="display:none;">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">模型 provider</label>
+            <input id="modelProvider" class="form-control" placeholder="anthropic/openai/google">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">自动检测模型</label>
+            <div class="input-group">
+              <input id="detectedModelPreview" class="form-control" placeholder="点击上方工具按钮检测" readonly>
+              <span class="input-group-text">只读</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-3 form-section" id="section-session" style="display:none;">
           <div class="col-md-4">
             <label class="form-label fw-semibold">超时时间 (timeoutSeconds)</label>
             <input id="timeoutSeconds" type="number" class="form-control" min="10" max="3600" value="600">
@@ -165,6 +199,21 @@
             <label class="form-label fw-semibold">温度参数 (temperature)</label>
             <input id="temperature" type="number" class="form-control" min="0" max="2" step="0.1" value="0.7">
             <div class="help-text">模型创造力参数 (0.0-2.0)</div>
+          </div>
+        </div>
+
+        <div class="row g-3 form-section" id="section-gateway" style="display:none;">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Gateway Base URL</label>
+            <input id="gatewayBaseUrl" class="form-control" placeholder="http://127.0.0.1:11434/v1">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Gateway API Key</label>
+            <input id="gatewayApiKey" class="form-control" placeholder="sk-...">
+          </div>
+          <div class="col-md-12">
+            <label class="form-label fw-semibold">CORS allowOrigins（每行一个）</label>
+            <textarea id="corsOrigins" rows="3" class="form-control" placeholder="http://localhost:3000\nhttp://127.0.0.1:5173"></textarea>
           </div>
         </div>
       </div>
@@ -195,12 +244,15 @@
   const $ = (id) => document.getElementById(id);
   const fields = [
     'modelPrimary', 'modelFallbacks', 'workspace', 'thinkingDefault',
-    'timeoutSeconds', 'maxConcurrent', 'temperature'
+    'timeoutSeconds', 'maxConcurrent', 'temperature',
+    'tgToken', 'tgChatId', 'discordWebhook', 'waApiUrl',
+    'gatewayBaseUrl', 'gatewayApiKey', 'corsOrigins', 'modelProvider'
   ];
 
   const defaultConfig = {
     agents: {
       primary: 'anthropic/claude-opus-4-5',
+      provider: 'anthropic',
       fallbacks: ['openai/gpt-5.2', 'google/gemini-2.0'],
       workspace: '~/.openclaw/workspace',
       thinkingDefault: 'high',
@@ -264,13 +316,23 @@
 
   function setForm(cfg) {
     const a = cfg.agents || {};
+    const c = cfg.channels || {};
+    const g = cfg.gateway || {};
     $('modelPrimary').value = a.primary || '';
+    $('modelProvider').value = a.provider || '';
     $('modelFallbacks').value = (a.fallbacks || []).join('\n');
     $('workspace').value = a.workspace || '';
     $('thinkingDefault').value = a.thinkingDefault || 'high';
     $('timeoutSeconds').value = a.timeoutSeconds ?? 600;
     $('maxConcurrent').value = a.maxConcurrent ?? 3;
     $('temperature').value = a.temperature ?? 0.7;
+    $('tgToken').value = c.telegram?.token || '';
+    $('tgChatId').value = c.telegram?.chatId || '';
+    $('discordWebhook').value = c.discord?.webhook || '';
+    $('waApiUrl').value = c.whatsapp?.apiUrl || '';
+    $('gatewayBaseUrl').value = g.baseUrl || '';
+    $('gatewayApiKey').value = g.apiKey || '';
+    $('corsOrigins').value = (g.cors?.allowOrigins || []).join('\n');
   }
 
   function buildFromForm() {
@@ -282,12 +344,25 @@
 
     state.config.agents = {
       primary: $('modelPrimary').value.trim(),
+      provider: $('modelProvider').value.trim() || $('modelPrimary').value.trim().split('/')[0] || 'custom',
       fallbacks: f,
       workspace: $('workspace').value.trim(),
       thinkingDefault: $('thinkingDefault').value,
       timeoutSeconds: Number($('timeoutSeconds').value),
       maxConcurrent: Number($('maxConcurrent').value),
       temperature: Number($('temperature').value),
+    };
+    state.config.channels = {
+      telegram: { token: $('tgToken').value.trim(), chatId: $('tgChatId').value.trim() },
+      discord: { webhook: $('discordWebhook').value.trim() },
+      whatsapp: { apiUrl: $('waApiUrl').value.trim() },
+    };
+    state.config.gateway = {
+      baseUrl: $('gatewayBaseUrl').value.trim(),
+      apiKey: $('gatewayApiKey').value.trim(),
+      cors: {
+        allowOrigins: $('corsOrigins').value.split('\n').map(s => s.trim()).filter(Boolean)
+      }
     };
 
     editor.setValue(toText(state.config));
@@ -310,6 +385,7 @@
     const errs = [];
     if (!cfg?.agents?.primary?.includes('/')) errs.push('agents.primary 必须是 provider/model 格式');
     if (!cfg?.agents?.workspace) errs.push('agents.workspace 不能为空');
+    if (!cfg?.gateway?.baseUrl?.startsWith('http')) errs.push('gateway.baseUrl 必须是 http/https URL');
     return errs;
   }
 
@@ -362,6 +438,7 @@
       const model = json?.data?.[0]?.id || json?.models?.[0]?.name;
       if (!model) throw new Error('没有识别到模型');
       $('modelPrimary').value = model.includes('/') ? model : `openai/${model}`;
+      $('detectedModelPreview').value = model;
       buildFromForm();
       alert('检测到模型：' + model);
     } catch (e) {
@@ -371,6 +448,7 @@
 
   function resetNew() {
     state.config = structuredClone(defaultConfig);
+    $('detectedModelPreview').value = '';
     setForm(state.config);
     editor.setValue(toText(state.config));
     validateConfig();
@@ -382,6 +460,24 @@
     reader.readAsText(file, 'utf-8');
   }
 
+  const sectionMap = {
+    form: { id: 'section-agents', title: 'Agents智能体配置' },
+    channels: { id: 'section-channels', title: 'Channels配置' },
+    models: { id: 'section-models', title: 'Models配置' },
+    session: { id: 'section-session', title: 'Session配置' },
+    gateway: { id: 'section-gateway', title: 'Gateway配置' },
+  };
+
+  function switchFormSection(view) {
+    Object.values(sectionMap).forEach(({ id }) => {
+      const el = $(id);
+      if (el) el.style.display = 'none';
+    });
+    const item = sectionMap[view] || sectionMap.form;
+    $(item.id).style.display = '';
+    $('formTitle').innerHTML = `<i class=\"bi bi-braces-asterisk\"></i> ${item.title}`;
+  }
+
   document.querySelectorAll('.menu .item').forEach(el => {
     el.addEventListener('click', (e) => {
       e.preventDefault();
@@ -391,6 +487,7 @@
       const showEditor = view === 'editor';
       $('formWrap').classList.toggle('active', !showEditor);
       $('editorWrap').classList.toggle('active', showEditor);
+      if (!showEditor) switchFormSection(view);
     });
   });
 
@@ -455,6 +552,7 @@
   }
 
   setForm(state.config);
+  switchFormSection('form');
   editor.setValue(toText(state.config));
   validateConfig();
   setInterval(() => state.autoValidate && validateConfig(), 2000);
