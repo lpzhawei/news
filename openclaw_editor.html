@@ -276,7 +276,8 @@
     config: structuredClone(defaultConfig),
     autoValidate: true,
     lockForm: false,
-    recentFiles: JSON.parse(localStorage.getItem('openclaw_recent_files') || '[]')
+    recentFiles: JSON.parse(localStorage.getItem('openclaw_recent_files') || '[]'),
+    editorSyncTimer: null
   };
 
   const schema = {
@@ -412,10 +413,7 @@
   function importText(text, name = '未命名') {
     try {
       const parsed = JSON5.parse(text);
-      state.config = parsed;
-      state.lockForm = true;
-      setForm(parsed);
-      state.lockForm = false;
+      applyParsedConfig(parsed);
       editor.setValue(toText(parsed));
       cacheRecent(name, parsed);
       validateConfig();
@@ -427,6 +425,27 @@
   function cacheRecent(name, data) {
     state.recentFiles = [{ name, data, time: new Date().toISOString() }, ...state.recentFiles.filter(x => x.name !== name)].slice(0, 8);
     localStorage.setItem('openclaw_recent_files', JSON.stringify(state.recentFiles));
+  }
+
+  function applyParsedConfig(parsed) {
+    state.config = parsed;
+    state.lockForm = true;
+    setForm(parsed);
+    state.lockForm = false;
+  }
+
+  function syncFromEditor(showError = false) {
+    try {
+      const parsed = JSON5.parse(editor.getValue());
+      applyParsedConfig(parsed);
+      validateConfig();
+      return true;
+    } catch (e) {
+      if (showError) {
+        setValidation(false, ['JSON5 解析失败:', e.message]);
+      }
+      return false;
+    }
   }
 
   async function detectModel() {
@@ -485,6 +504,7 @@
       el.classList.add('active');
       const view = el.dataset.view;
       const showEditor = view === 'editor';
+      if (!showEditor) syncFromEditor(true);
       $('formWrap').classList.toggle('active', !showEditor);
       $('editorWrap').classList.toggle('active', showEditor);
       if (!showEditor) switchFormSection(view);
@@ -497,16 +517,8 @@
   });
 
   editor.on('change', () => {
-    try {
-      const parsed = JSON5.parse(editor.getValue());
-      state.config = parsed;
-      state.lockForm = true;
-      setForm(parsed);
-      state.lockForm = false;
-      validateConfig();
-    } catch (e) {
-      setValidation(false, ['JSON5 解析失败:', e.message]);
-    }
+    if (state.editorSyncTimer) clearTimeout(state.editorSyncTimer);
+    state.editorSyncTimer = setTimeout(() => syncFromEditor(state.autoValidate), 180);
   });
 
   $('btnValidateSide').addEventListener('click', validateConfig);
