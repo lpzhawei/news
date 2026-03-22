@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpenClaw.json Editor (Single File)</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/theme/material-darker.min.css">
+  <style>
+    :root {
+      --editor-h: 560px;
+    }
+    body { background: #f7f8fa; }
+    body.dark {
+      background: #111827;
+      color: #e5e7eb;
+    }
+    .pane {
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      background: white;
+      padding: 14px;
+    }
+    body.dark .pane {
+      background: #1f2937;
+      border-color: #374151;
+    }
+    .CodeMirror {
+      height: var(--editor-h);
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    body.dark .CodeMirror { border-color: #4b5563; }
+    .status-pass { color: #0f9d58; }
+    .status-fail { color: #d93025; }
+    .small-help { font-size: 12px; color: #6b7280; }
+    body.dark .small-help { color: #9ca3af; }
+  </style>
+</head>
+<body>
+<div class="container-fluid py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">OpenClaw.json Editor</h4>
+    <div class="d-flex gap-2">
+      <button id="btnDark" class="btn btn-outline-secondary btn-sm">🌙 暗黑模式</button>
+      <button id="btnAuto" class="btn btn-outline-primary btn-sm">自动验证：开</button>
+      <button id="btnValidate" class="btn btn-success btn-sm">立即验证</button>
+      <button id="btnExport" class="btn btn-primary btn-sm">导出 JSON5 (Ctrl+S)</button>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-4">
+      <div class="pane">
+        <h6>可视化配置表单</h6>
+        <div class="row g-2">
+          <div class="col-12">
+            <label class="form-label">应用名称</label>
+            <input id="appName" class="form-control" placeholder="OpenClaw">
+          </div>
+          <div class="col-6">
+            <label class="form-label">启用</label>
+            <select id="enabled" class="form-select">
+              <option value="true">true</option>
+              <option value="false">false</option>
+            </select>
+          </div>
+          <div class="col-6">
+            <label class="form-label">日志等级</label>
+            <select id="logLevel" class="form-select">
+              <option>debug</option><option>info</option><option>warn</option><option>error</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label">模型</label>
+            <div class="input-group">
+              <input id="model" class="form-control" placeholder="gpt-4.1-mini">
+              <button id="btnDetectModel" class="btn btn-outline-secondary">自动检测</button>
+            </div>
+          </div>
+
+          <hr class="my-2">
+          <h6>多渠道通知</h6>
+          <div class="col-12"><label class="form-label">Telegram Token</label><input id="tgToken" class="form-control"></div>
+          <div class="col-12"><label class="form-label">Telegram Chat ID</label><input id="tgChatId" class="form-control"></div>
+          <div class="col-12"><label class="form-label">Discord Webhook</label><input id="discordWebhook" class="form-control"></div>
+          <div class="col-12"><label class="form-label">WhatsApp API URL</label><input id="waApi" class="form-control"></div>
+
+          <hr class="my-2">
+          <h6>Gateway / CORS</h6>
+          <div class="col-12"><label class="form-label">Gateway URL</label><input id="gatewayUrl" class="form-control" placeholder="http://127.0.0.1:11434/v1"></div>
+          <div class="col-12"><label class="form-label">API Key</label><input id="apiKey" class="form-control" placeholder="sk-xxx"></div>
+          <div class="col-12"><label class="form-label">允许 Origin（逗号分隔）</label><input id="corsOrigins" class="form-control" placeholder="http://localhost:3000,http://127.0.0.1:5173"></div>
+
+          <div class="col-12 mt-2 d-flex gap-2">
+            <button id="btnLaunch" class="btn btn-warning">OpenClaw 启动</button>
+            <button id="btnImport" class="btn btn-outline-primary">导入文件</button>
+            <input id="fileInput" type="file" accept=".json,.json5" style="display:none" />
+          </div>
+
+          <div class="col-12 mt-2">
+            <label class="form-label">最近文件缓存</label>
+            <select id="recentFiles" class="form-select"></select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-8">
+      <div class="pane">
+        <h6>JSON5 编辑器</h6>
+        <textarea id="jsonEditor"></textarea>
+        <p class="small-help mt-2 mb-0">支持 JSON5（注释、尾逗号）。支持拖拽文件到页面任意区域打开。</p>
+      </div>
+      <div class="pane mt-3">
+        <h6>验证器</h6>
+        <div id="validateStatus" class="fw-semibold">尚未验证</div>
+        <pre id="validateOutput" class="small mb-0"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/mode/javascript/javascript.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/json5@2.2.3/dist/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ajv@8.17.1/dist/ajv7.min.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const state = {
+    config: {
+      app: { name: "OpenClaw", enabled: true, logLevel: "info" },
+      model: { provider: "openai-compatible", name: "gpt-4.1-mini" },
+      channels: {
+        telegram: { token: "", chatId: "" },
+        discord: { webhook: "" },
+        whatsapp: { apiUrl: "" }
+      },
+      gateway: {
+        baseUrl: "http://127.0.0.1:11434/v1",
+        apiKey: "",
+        cors: { allowOrigins: ["http://localhost:3000"] }
+      }
+    },
+    autoValidate: true,
+    fromEditor: false,
+    recentFiles: JSON.parse(localStorage.getItem("openclaw_recent_files") || "[]")
+  };
+
+  const schema = {
+    type: "object",
+    required: ["app", "model", "channels", "gateway"],
+    properties: {
+      app: {
+        type: "object",
+        required: ["name", "enabled", "logLevel"],
+        properties: {
+          name: { type: "string", minLength: 1 },
+          enabled: { type: "boolean" },
+          logLevel: { enum: ["debug", "info", "warn", "error"] }
+        }
+      },
+      model: {
+        type: "object",
+        required: ["provider", "name"],
+        properties: {
+          provider: { type: "string" },
+          name: { type: "string", minLength: 1 }
+        }
+      },
+      channels: {
+        type: "object",
+        properties: {
+          telegram: { type: "object" },
+          discord: { type: "object" },
+          whatsapp: { type: "object" }
+        }
+      },
+      gateway: {
+        type: "object",
+        required: ["baseUrl", "apiKey", "cors"],
+        properties: {
+          baseUrl: { type: "string", minLength: 1 },
+          apiKey: { type: "string" },
+          cors: {
+            type: "object",
+            required: ["allowOrigins"],
+            properties: {
+              allowOrigins: { type: "array", items: { type: "string" }, minItems: 1 }
+            }
+          }
+        }
+      }
+    }
+  };
+
+  let validateFn = null;
+  if (window.ajv7) {
+    const ajv = new ajv7({ allErrors: true, strict: false });
+    validateFn = ajv.compile(schema);
+  }
+
+  const editor = CodeMirror.fromTextArea($("jsonEditor"), {
+    mode: { name: "javascript", json: true },
+    lineNumbers: true,
+    theme: "default",
+    tabSize: 2,
+    indentUnit: 2,
+  });
+
+  function toPrettyJSON5(obj) {
+    return JSON.stringify(obj, null, 2);
+  }
+
+  function setFormFromConfig(cfg) {
+    $("appName").value = cfg.app?.name ?? "";
+    $("enabled").value = String(cfg.app?.enabled ?? true);
+    $("logLevel").value = cfg.app?.logLevel ?? "info";
+    $("model").value = cfg.model?.name ?? "";
+    $("tgToken").value = cfg.channels?.telegram?.token ?? "";
+    $("tgChatId").value = cfg.channels?.telegram?.chatId ?? "";
+    $("discordWebhook").value = cfg.channels?.discord?.webhook ?? "";
+    $("waApi").value = cfg.channels?.whatsapp?.apiUrl ?? "";
+    $("gatewayUrl").value = cfg.gateway?.baseUrl ?? "";
+    $("apiKey").value = cfg.gateway?.apiKey ?? "";
+    $("corsOrigins").value = (cfg.gateway?.cors?.allowOrigins || []).join(",");
+  }
+
+  function updateConfigFromForm() {
+    if (state.fromEditor) return;
+    state.config.app = {
+      name: $("appName").value.trim(),
+      enabled: $("enabled").value === "true",
+      logLevel: $("logLevel").value
+    };
+    state.config.model = {
+      provider: "openai-compatible",
+      name: $("model").value.trim()
+    };
+    state.config.channels = {
+      telegram: { token: $("tgToken").value.trim(), chatId: $("tgChatId").value.trim() },
+      discord: { webhook: $("discordWebhook").value.trim() },
+      whatsapp: { apiUrl: $("waApi").value.trim() }
+    };
+    state.config.gateway = {
+      baseUrl: $("gatewayUrl").value.trim(),
+      apiKey: $("apiKey").value.trim(),
+      cors: {
+        allowOrigins: $("corsOrigins").value.split(",").map(s => s.trim()).filter(Boolean)
+      }
+    };
+    editor.setValue(toPrettyJSON5(state.config));
+    runValidation();
+  }
+
+  function showValidation(ok, lines) {
+    const st = $("validateStatus");
+    const out = $("validateOutput");
+    if (ok) {
+      st.textContent = "✅ 验证通过";
+      st.className = "fw-semibold status-pass";
+    } else {
+      st.textContent = "❌ 验证失败";
+      st.className = "fw-semibold status-fail";
+    }
+    out.textContent = lines.join("\n");
+  }
+
+  function customChecks(cfg) {
+    const errors = [];
+    if (!cfg?.gateway?.baseUrl?.startsWith("http")) {
+      errors.push("gateway.baseUrl 必须是 http/https URL");
+    }
+    if (!cfg?.model?.name) {
+      errors.push("model.name 不能为空");
+    }
+    return errors;
+  }
+
+  function runValidation() {
+    const cfg = state.config;
+    const errors = [];
+    const cErrors = customChecks(cfg);
+    if (cErrors.length) errors.push(...cErrors);
+    if (validateFn) {
+      const ok = validateFn(cfg);
+      if (!ok && validateFn.errors) {
+        for (const e of validateFn.errors) {
+          errors.push(`${e.instancePath || '/'} ${e.message}`);
+        }
+      }
+    }
+    showValidation(errors.length === 0, errors.length ? errors : ["配置符合 schema 与自定义规则"]);
+  }
+
+  function saveFile() {
+    const text = editor.getValue();
+    const blob = new Blob([text], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "openclaw.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function setEditorAndParse(text, sourceName = "未命名") {
+    try {
+      const parsed = JSON5.parse(text);
+      state.config = parsed;
+      state.fromEditor = true;
+      setFormFromConfig(parsed);
+      state.fromEditor = false;
+      editor.setValue(toPrettyJSON5(parsed));
+      addRecent(sourceName, parsed);
+      runValidation();
+    } catch (e) {
+      showValidation(false, ["JSON5 解析失败:", e.message]);
+    }
+  }
+
+  function addRecent(name, cfg) {
+    state.recentFiles = [{ name, data: cfg, time: new Date().toISOString() }, ...state.recentFiles.filter(x => x.name !== name)].slice(0, 8);
+    localStorage.setItem("openclaw_recent_files", JSON.stringify(state.recentFiles));
+    refreshRecent();
+  }
+
+  function refreshRecent() {
+    const sel = $("recentFiles");
+    sel.innerHTML = "<option value=''>-- 选择最近文件 --</option>";
+    state.recentFiles.forEach((f, i) => {
+      const op = document.createElement("option");
+      op.value = String(i);
+      op.textContent = `${f.name} (${new Date(f.time).toLocaleString()})`;
+      sel.appendChild(op);
+    });
+  }
+
+  async function detectModel() {
+    const url = prompt("输入模型网关 baseUrl（自动拼接 /models）", state.config.gateway?.baseUrl || "http://127.0.0.1:11434/v1");
+    if (!url) return;
+    const normalized = url.replace(/\/$/, "");
+    try {
+      const resp = await fetch(`${normalized}/models`, {
+        headers: state.config.gateway.apiKey ? { Authorization: `Bearer ${state.config.gateway.apiKey}` } : {}
+      });
+      const json = await resp.json();
+      const model = json?.data?.[0]?.id || json?.models?.[0]?.name;
+      if (!model) throw new Error("没有识别到模型");
+      $("model").value = model;
+      updateConfigFromForm();
+      alert(`检测到模型: ${model}`);
+    } catch (e) {
+      alert(`自动检测失败: ${e.message}`);
+    }
+  }
+
+  function launchOpenClaw() {
+    const cmd = `openclaw --config "${location.pathname.replace(/[^/]+$/, '')}openclaw.json"`;
+    navigator.clipboard?.writeText(cmd).catch(() => {});
+    alert("已复制启动命令到剪贴板（若浏览器允许）。\n" + cmd + "\n\n请先导出 openclaw.json 到同目录。");
+  }
+
+  document.querySelectorAll("input,select").forEach(el => {
+    if (el.id !== "fileInput" && el.id !== "recentFiles") {
+      el.addEventListener("input", updateConfigFromForm);
+      el.addEventListener("change", updateConfigFromForm);
+    }
+  });
+
+  editor.on("change", () => {
+    try {
+      const parsed = JSON5.parse(editor.getValue());
+      state.config = parsed;
+      state.fromEditor = true;
+      setFormFromConfig(parsed);
+      state.fromEditor = false;
+      runValidation();
+    } catch (e) {
+      showValidation(false, ["JSON5 解析失败:", e.message]);
+    }
+  });
+
+  $("btnValidate").addEventListener("click", runValidation);
+  $("btnExport").addEventListener("click", saveFile);
+  $("btnImport").addEventListener("click", () => $("fileInput").click());
+  $("btnLaunch").addEventListener("click", launchOpenClaw);
+  $("btnDetectModel").addEventListener("click", detectModel);
+
+  $("fileInput").addEventListener("change", (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => setEditorAndParse(String(reader.result), f.name);
+    reader.readAsText(f, "utf-8");
+  });
+
+  $("recentFiles").addEventListener("change", (e) => {
+    if (!e.target.value) return;
+    const item = state.recentFiles[Number(e.target.value)];
+    if (!item) return;
+    state.config = item.data;
+    setFormFromConfig(state.config);
+    editor.setValue(toPrettyJSON5(state.config));
+    runValidation();
+  });
+
+  $("btnAuto").addEventListener("click", () => {
+    state.autoValidate = !state.autoValidate;
+    $("btnAuto").textContent = `自动验证：${state.autoValidate ? '开' : '关'}`;
+  });
+
+  $("btnDark").addEventListener("click", () => {
+    document.body.classList.toggle("dark");
+    const dark = document.body.classList.contains("dark");
+    editor.setOption("theme", dark ? "material-darker" : "default");
+    localStorage.setItem("openclaw_dark", dark ? "1" : "0");
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      saveFile();
+    }
+  });
+
+  ["dragenter", "dragover"].forEach(evt => {
+    document.addEventListener(evt, (e) => { e.preventDefault(); });
+  });
+  document.addEventListener("drop", (e) => {
+    e.preventDefault();
+    const f = e.dataTransfer?.files?.[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => setEditorAndParse(String(r.result), f.name);
+    r.readAsText(f, "utf-8");
+  });
+
+  if (localStorage.getItem("openclaw_dark") === "1") {
+    document.body.classList.add("dark");
+    editor.setOption("theme", "material-darker");
+  }
+
+  setFormFromConfig(state.config);
+  editor.setValue(toPrettyJSON5(state.config));
+  refreshRecent();
+  runValidation();
+  setInterval(() => state.autoValidate && runValidation(), 2000);
+})();
+</script>
+</body>
+</html>
