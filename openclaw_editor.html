@@ -277,7 +277,8 @@
     autoValidate: true,
     lockForm: false,
     recentFiles: JSON.parse(localStorage.getItem('openclaw_recent_files') || '[]'),
-    editorSyncTimer: null
+    editorSyncTimer: null,
+    lockEditorEvent: false
   };
 
   const schema = {
@@ -366,7 +367,9 @@
       }
     };
 
+    state.lockEditorEvent = true;
     editor.setValue(toText(state.config));
+    state.lockEditorEvent = false;
     validateConfig();
   }
 
@@ -517,8 +520,9 @@
   });
 
   editor.on('change', () => {
+    if (state.lockEditorEvent) return;
     if (state.editorSyncTimer) clearTimeout(state.editorSyncTimer);
-    state.editorSyncTimer = setTimeout(() => syncFromEditor(state.autoValidate), 180);
+    state.editorSyncTimer = setTimeout(() => syncFromEditor(true), 180);
   });
 
   $('btnValidateSide').addEventListener('click', validateConfig);
