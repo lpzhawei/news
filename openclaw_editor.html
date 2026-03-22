@@ -149,6 +149,14 @@
               <option value="high" selected>高 (high)</option>
             </select>
           </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Meta 版本</label>
+            <input id="metaVersion" class="form-control" placeholder="2026.3.13">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Wizard 最后命令</label>
+            <input id="wizardCommand" class="form-control" placeholder="onboard">
+          </div>
         </div>
 
         <div class="row g-3 form-section" id="section-channels" style="display:none;">
@@ -182,6 +190,25 @@
               <span class="input-group-text">只读</span>
             </div>
           </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">models.mode</label>
+            <select id="modelsMode" class="form-select">
+              <option value="merge">merge</option>
+              <option value="replace">replace</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">主路由模型 (list.main.model)</label>
+            <input id="routeMainModel" class="form-control" placeholder="custom-provider/qwen3.5-plus">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">自定义 Provider ID</label>
+            <input id="providerId" class="form-control" placeholder="custom-dashscope-aliyuncs-com">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Provider baseUrl</label>
+            <input id="providerBaseUrl" class="form-control" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1">
+          </div>
         </div>
 
         <div class="row g-3 form-section" id="section-session" style="display:none;">
@@ -203,6 +230,18 @@
         </div>
 
         <div class="row g-3 form-section" id="section-gateway" style="display:none;">
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Gateway 端口</label>
+            <input id="gatewayPort" type="number" class="form-control" placeholder="18789">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Gateway 模式</label>
+            <input id="gatewayMode" class="form-control" placeholder="local">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Gateway 绑定</label>
+            <input id="gatewayBind" class="form-control" placeholder="lan">
+          </div>
           <div class="col-md-6">
             <label class="form-label fw-semibold">Gateway Base URL</label>
             <input id="gatewayBaseUrl" class="form-control" placeholder="http://127.0.0.1:11434/v1">
@@ -214,6 +253,10 @@
           <div class="col-md-12">
             <label class="form-label fw-semibold">CORS allowOrigins（每行一个）</label>
             <textarea id="corsOrigins" rows="3" class="form-control" placeholder="http://localhost:3000\nhttp://127.0.0.1:5173"></textarea>
+          </div>
+          <div class="col-md-12">
+            <label class="form-label fw-semibold">Gateway Token (auth.token)</label>
+            <input id="gatewayToken" class="form-control" placeholder="token...">
           </div>
         </div>
       </div>
@@ -246,10 +289,22 @@
     'modelPrimary', 'modelFallbacks', 'workspace', 'thinkingDefault',
     'timeoutSeconds', 'maxConcurrent', 'temperature',
     'tgToken', 'tgChatId', 'discordWebhook', 'waApiUrl',
-    'gatewayBaseUrl', 'gatewayApiKey', 'corsOrigins', 'modelProvider'
+    'gatewayBaseUrl', 'gatewayApiKey', 'corsOrigins', 'modelProvider',
+    'modelsMode', 'routeMainModel', 'providerId', 'providerBaseUrl',
+    'metaVersion', 'wizardCommand', 'gatewayPort', 'gatewayMode', 'gatewayBind', 'gatewayToken'
   ];
 
   const defaultConfig = {
+    meta: {
+      lastTouchedVersion: '2026.3.13',
+      lastTouchedAt: new Date().toISOString()
+    },
+    wizard: {
+      lastRunAt: new Date().toISOString(),
+      lastRunVersion: '2026.3.13',
+      lastRunCommand: 'onboard',
+      lastRunMode: 'local'
+    },
     agents: {
       primary: 'anthropic/claude-opus-4-5',
       provider: 'anthropic',
@@ -265,11 +320,22 @@
       discord: { webhook: '' },
       whatsapp: { apiUrl: '' }
     },
+    models: {
+      mode: 'merge',
+      providers: {}
+    },
+    list: [{ id: 'main', model: 'anthropic/claude-opus-4-5' }],
     gateway: {
+      port: 18789,
+      mode: 'local',
+      bind: 'lan',
       baseUrl: 'http://127.0.0.1:11434/v1',
       apiKey: '',
-      cors: { allowOrigins: ['http://localhost:3000'] }
-    }
+      cors: { allowOrigins: ['http://localhost:3000'] },
+      auth: { mode: 'token', token: '' }
+    },
+    session: { dmScope: 'per-channel-peer' },
+    tools: { profile: 'coding' }
   };
 
   const state = {
@@ -320,6 +386,10 @@
     const a = cfg.agents || {};
     const c = cfg.channels || {};
     const g = cfg.gateway || {};
+    const m = cfg.models || {};
+    const firstProviderId = Object.keys(m.providers || {})[0] || '';
+    const provider = firstProviderId ? m.providers[firstProviderId] : {};
+    const routeMain = Array.isArray(cfg.list) ? cfg.list.find(x => x.id === 'main') : null;
     $('modelPrimary').value = a.primary || '';
     $('modelProvider').value = a.provider || '';
     $('modelFallbacks').value = (a.fallbacks || []).join('\n');
@@ -335,6 +405,16 @@
     $('gatewayBaseUrl').value = g.baseUrl || '';
     $('gatewayApiKey').value = g.apiKey || '';
     $('corsOrigins').value = (g.cors?.allowOrigins || []).join('\n');
+    $('modelsMode').value = m.mode || 'merge';
+    $('routeMainModel').value = routeMain?.model || '';
+    $('providerId').value = firstProviderId;
+    $('providerBaseUrl').value = provider.baseUrl || '';
+    $('metaVersion').value = cfg.meta?.lastTouchedVersion || '';
+    $('wizardCommand').value = cfg.wizard?.lastRunCommand || '';
+    $('gatewayPort').value = g.port ?? '';
+    $('gatewayMode').value = g.mode || '';
+    $('gatewayBind').value = g.bind || '';
+    $('gatewayToken').value = g.auth?.token || '';
   }
 
   function buildFromForm() {
@@ -360,12 +440,47 @@
       whatsapp: { apiUrl: $('waApiUrl').value.trim() },
     };
     state.config.gateway = {
+      port: Number($('gatewayPort').value) || 18789,
+      mode: $('gatewayMode').value.trim() || 'local',
+      bind: $('gatewayBind').value.trim() || 'lan',
       baseUrl: $('gatewayBaseUrl').value.trim(),
       apiKey: $('gatewayApiKey').value.trim(),
       cors: {
         allowOrigins: $('corsOrigins').value.split('\n').map(s => s.trim()).filter(Boolean)
+      },
+      auth: {
+        mode: 'token',
+        token: $('gatewayToken').value.trim()
       }
     };
+    state.config.meta = {
+      ...(state.config.meta || {}),
+      lastTouchedVersion: $('metaVersion').value.trim(),
+      lastTouchedAt: new Date().toISOString()
+    };
+    state.config.wizard = {
+      ...(state.config.wizard || {}),
+      lastRunCommand: $('wizardCommand').value.trim()
+    };
+    const pId = $('providerId').value.trim();
+    const pBase = $('providerBaseUrl').value.trim();
+    state.config.models = state.config.models || {};
+    state.config.models.mode = $('modelsMode').value || 'merge';
+    state.config.models.providers = state.config.models.providers || {};
+    if (pId) {
+      state.config.models.providers[pId] = {
+        ...(state.config.models.providers[pId] || {}),
+        baseUrl: pBase,
+        apiKey: state.config.models.providers[pId]?.apiKey || '',
+        api: state.config.models.providers[pId]?.api || 'openai-completions',
+        models: state.config.models.providers[pId]?.models || []
+      };
+    }
+    const route = $('routeMainModel').value.trim();
+    state.config.list = Array.isArray(state.config.list) ? state.config.list : [];
+    const mainIdx = state.config.list.findIndex(x => x.id === 'main');
+    if (mainIdx >= 0) state.config.list[mainIdx].model = route;
+    else if (route) state.config.list.push({ id: 'main', model: route });
 
     state.lockEditorEvent = true;
     editor.setValue(toText(state.config));
@@ -390,6 +505,7 @@
     if (!cfg?.agents?.primary?.includes('/')) errs.push('agents.primary 必须是 provider/model 格式');
     if (!cfg?.agents?.workspace) errs.push('agents.workspace 不能为空');
     if (!cfg?.gateway?.baseUrl?.startsWith('http')) errs.push('gateway.baseUrl 必须是 http/https URL');
+    if (cfg?.models?.mode && !['merge', 'replace'].includes(cfg.models.mode)) errs.push('models.mode 只能是 merge 或 replace');
     return errs;
   }
 
