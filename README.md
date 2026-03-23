@@ -1,94 +1,125 @@
-# OpenClaw Config Editor
+# OpenClaw.json 编辑器
 
-一个用于编辑 `openclaw.json / openclaw.json5` 的单文件图形化工具。  
-支持**表单编辑 + JSON5 编辑 + 校验 + 导入导出**，可直接双击 HTML 使用，也可打包为 Windows `.exe`。
+> 一个开箱即用的单文件可视化配置编辑器，专为 OpenClaw 项目的 `config.json` 文件设计。无需安装任何依赖，双击即可使用。
 
-## 功能特性
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![HTML](https://img.shields.io/badge/HTML-Single%20File-orange.svg)
+![Bootstrap](https://img.shields.io/badge/Bootstrap-5.3-purple.svg)
+![CodeMirror](https://img.shields.io/badge/CodeMirror-5.65-green.svg)
 
-- 左侧导航分区配置（Agents / Channels / Models / Session / Gateway）
-- 右侧 JSON5 编辑器（CodeMirror）
-- 表单 ↔ JSON5 双向同步
-- JSON Schema（AJV）+ 自定义规则校验
-- 自动验证开关（定时校验）
-- 拖拽导入、文件打开、另存为、导出
-- `Ctrl+S` 快捷保存
-- 暗黑模式
-- 模型自动检测（请求 `/models`）
-- localStorage 本地缓存最近配置
+---
 
-## 快速开始（HTML 单文件）
+## ✨ 功能概览
 
-1. 直接打开 `openclaw_editor.html`
-2. 左侧填写配置项，或切到「JSON编辑器」手写 JSON5
-3. 查看底部「验证结果」
-4. 点击「导出/保存配置」输出 `openclaw.json`
+| 功能 | 说明 |
+|------|------|
+| 📝 可视化表单编辑 | 通过侧边栏导航切换各配置分组，表单字段实时修改 |
+| ⚡ JSON 编辑器 | 集成 CodeMirror + Dracula 主题，支持语法高亮、折叠、错误提示 |
+| 🔄 双向同步 | 表单↔JSON 实时同步；可开启 JSON→表单自动同步开关（800ms 防抖） |
+| ✅ 配置验证 | 自动验证（静默刷新底部面板）+ 手动触发（弹出 Toast 提示） |
+| 📁 文件管理 | 支持拖拽打开文件、另存为、导出 JSON5；最近文件列表可点击一键恢复 |
+| 🤖 Provider 管理 | 可添加/删除 AI 模型 Provider，自动深度合并保留原始未知字段 |
+| 💡 模板生成 | 一键生成带有示例数据的完整配置模板 |
 
-> 该工具是纯前端单文件应用，不依赖服务器。
+---
 
-## 打包为 Windows EXE
+## 🚀 快速开始
 
-项目包含 `package_to_exe.py` 启动脚本。
+### 方式一：直接打开（推荐）
 
-### 1) 安装依赖
+下载 `openclaw-editor.html` 文件，用任意现代浏览器双击打开即可。
 
 ```bash
-pip install pywebview pyinstaller
+# 或者用本地服务器运行（避免部分浏览器的 file:// 限制）
+python -m http.server 7788
+# 然后访问 http://localhost:7788/openclaw-editor.html
 ```
 
-### 2) 打包
+### 方式二：GitHub Pages
 
-```bash
-pyinstaller -F -w package_to_exe.py --add-data "openclaw_editor.html;."
+Fork 本仓库后，在 **Settings → Pages** 中选择 `main` 分支根目录，等待部署完成后即可通过链接访问在线版本。
+
+---
+
+## 📖 使用说明
+
+### 界面结构
+
+```
+┌─────────────┬──────────────────────────────────────┐
+│             │  顶部工具栏（打开/保存/验证/导出...）  │
+│   侧边栏    ├──────────────────────────────────────┤
+│   导航菜单  │                                      │
+│             │         主编辑区域                   │
+│  ● 基础设置 │    （表单 ↔ JSON 编辑器双栏）        │
+│  ● AI 模型  │                                      │
+│  ● Provider │                                      │
+│  ● 高级设置 ├──────────────────────────────────────┤
+│  ● 最近文件 │  底部验证面板（错误/警告实时显示）    │
+└─────────────┴──────────────────────────────────────┘
 ```
 
-### 3) 运行
+### 工具栏说明
 
-打包产物位于：
+| 按钮 | 功能 |
+|------|------|
+| 📂 打开文件 | 弹出文件选择框，支持拖拽 `.json` / `.json5` 文件 |
+| 💾 保存 | 保存到当前路径（如已打开文件）|
+| 💾 另存为 | 下载为新文件 |
+| ✅ 验证配置 | 手动触发完整验证，弹出结果 Toast |
+| 📤 导出 JSON5 | 以 JSON5 格式导出，支持注释 |
+| 🔄 JSON→表单 | 开关：开启后 JSON 编辑器改动 800ms 后自动同步表单 |
 
-- `dist/package_to_exe.exe`
+### 最近文件
 
-## 配置兼容说明
+- 侧边栏底部的"最近文件"列表会记录最多 8 条历史
+- 每条记录保存**文件名、保存时间和配置快照**
+- 点击任意条目可立即恢复该时刻的配置状态
 
-编辑器已兼容新版常见结构，包括：
+### Provider / 模型管理
 
-- `meta`
-- `wizard`
-- `models.mode / models.providers`
-- `list.main.model`
-- `gateway.port / mode / bind / auth.token`
-- `channels.telegram / discord / whatsapp`
+- 在"AI 模型 Provider"页面可添加自定义 Provider
+- 内置预设：OpenAI、Anthropic、Google Gemini、Azure OpenAI 等
+- 保存时使用**深度合并策略**，原 JSON 中存在的未知字段不会被覆盖
 
-## 发布
+---
 
-### v1.0.0（首个正式版本）
+## 🔧 技术栈
 
-- 发布日期：2026-03-22
-- 里程碑：首个可用正式版本
-- 包含：图形化编辑、JSON5 编辑、双向同步、校验、导入导出、暗黑模式、模型检测、EXE 打包脚本
+| 依赖 | 版本 | 用途 |
+|------|------|------|
+| [Bootstrap](https://getbootstrap.com/) | 5.3.0 | UI 框架、布局、组件 |
+| [CodeMirror](https://codemirror.net/) | 5.65.2 | JSON 代码编辑器 |
+| [JSON5](https://json5.org/) | 2.x | 宽松 JSON 解析（支持注释、末尾逗号）|
+| [Font Awesome](https://fontawesome.com/) | 6.4.0 | 图标库 |
 
-## 目录结构
+所有依赖均通过 CDN 引入，**无需本地安装**。
 
-```text
-.
-├── openclaw_editor.html   # 主应用（单文件前端）
-├── package_to_exe.py      # EXE 启动封装脚本
-└── README.md              # 项目说明文档
+---
+
+## 📁 文件结构
+
+```
+openclaw-editor.html    ← 完整独立的单文件应用（所有逻辑内嵌）
+README.md               ← 本说明文档
 ```
 
-## 许可证
+---
 
-可按你的项目需要添加（例如 MIT）。
+## 🐛 已知限制
 
-## PR 提交流程说明（Codex 限制）
+- 依赖 CDN 资源，**离线环境下无法正常使用**（可将依赖替换为本地文件）
+- 浏览器安全限制：通过 `file://` 协议直接打开时，部分功能（如自动读取本地文件路径）受限，建议使用本地 HTTP 服务器
+- localStorage 容量有限（约 5MB），最近文件快照在超限时自动降级（仅保存文件名和时间）
 
-如果你在平台里看到提示：
+---
 
-> Codex 目前不支持更新在 Codex 以外更新的拉取请求。
+## 🤝 贡献
 
-处理方式：
+欢迎提 Issue 和 PR！如有功能建议或 bug 报告，请在 Issues 页面详细描述复现步骤。
 
-1. 不要继续往原 PR 追加更新。
-2. 基于当前最新代码重新创建一个新 PR。
-3. 在新 PR 描述中注明：用于替代旧 PR（旧 PR 因外部更新无法继续由 Codex 维护）。
+---
 
-这样可以避免 PR 同步冲突，并确保后续更新可继续由 Codex 自动提交。
+## 📄 License
+
+[MIT](LICENSE)
