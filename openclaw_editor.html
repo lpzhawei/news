@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpenClaw 配置文件编辑器</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/theme/material-darker.min.css">
+  <style>
+    :root {
+      --sidebar-bg: #1f4488;
+      --sidebar-bg-2: #2b4f93;
+      --main-bg: #f3f4f6;
+      --card-bg: #ffffff;
+      --card-border: #d9dde6;
+    }
+    body { margin: 0; background: var(--main-bg); font-family: "Segoe UI", "PingFang SC", sans-serif; }
+    .app { display: flex; height: 100vh; overflow: hidden; }
+    .sidebar {
+      width: 282px;
+      background: linear-gradient(180deg, var(--sidebar-bg) 0%, var(--sidebar-bg-2) 100%);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid rgba(255,255,255,.12);
+    }
+    .brand { padding: 28px 18px 16px; border-bottom: 1px solid rgba(255,255,255,.2); }
+    .brand .title { font-size: 44px; font-weight: 700; line-height: 1; }
+    .brand .sub { font-size: 20px; font-weight: 600; margin-top: 4px; }
+    .brand .ver { font-size: 14px; opacity: .9; }
+    .menu { padding: 14px 12px; flex: 1; overflow: auto; }
+    .menu .item {
+      color: #d8e4ff; text-decoration: none; display: flex; align-items: center; gap: 10px;
+      padding: 12px 14px; border-radius: 10px; margin-bottom: 8px; font-size: 30px;
+    }
+    .menu .item.active, .menu .item:hover { background: rgba(255,255,255,.12); color: #fff; }
+    .sidebar-actions { padding: 14px 18px 18px; }
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .toolbar {
+      background: #fff; border-bottom: 1px solid #d5dbe6; padding: 10px 14px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .toolbar .btn { border-radius: 8px; }
+    .main-content { padding: 14px; overflow: auto; }
+    .card-shell {
+      background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px;
+      padding: 16px; box-shadow: 0 2px 4px rgba(0,0,0,.02);
+    }
+    .section-title { color: #0d62c5; font-size: 20px; font-weight: 700; margin-bottom: 10px; }
+    .help-text { color: #7b8495; font-size: 12px; margin-top: 3px; }
+    .editor-wrap { display: none; }
+    .editor-wrap.active { display: block; }
+    .form-wrap.active { display: block; }
+    .form-wrap { display: block; }
+    .CodeMirror { height: 580px; border: 1px solid #d5dbe6; border-radius: 8px; font-size: 14px; }
+    .validate-panel {
+      margin-top: 12px; background: #fff; border: 1px solid #d5dbe6; border-radius: 8px;
+      padding: 10px 12px; min-height: 96px;
+    }
+    .status-pass { color: #1d9c50; }
+    .status-fail { color: #d74e4e; }
+    body.dark {
+      --main-bg: #111827;
+      --card-bg: #1f2937;
+      --card-border: #374151;
+      color: #e5e7eb;
+    }
+    body.dark .toolbar, body.dark .validate-panel { background: #111827; border-color: #374151; }
+    body.dark .form-control, body.dark .form-select, body.dark .input-group-text, body.dark textarea {
+      background: #111827; color: #e5e7eb; border-color: #4b5563;
+    }
+    body.dark .help-text { color: #9ca3af; }
+    body.dark .section-title { color: #93c5fd; }
+    @media (max-width: 1200px) {
+      .sidebar { width: 220px; }
+      .menu .item { font-size: 20px; }
+      .brand .title { font-size: 32px; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="title">🤖 OpenClaw</div>
+      <div class="sub">配置文件编辑器</div>
+      <div class="ver">v1.0</div>
+    </div>
+    <nav class="menu">
+      <a href="#" class="item active" data-view="form"><i class="bi bi-cpu"></i>Agents配置</a>
+      <a href="#" class="item" data-view="channels"><i class="bi bi-chat-dots"></i>Channels配置</a>
+      <a href="#" class="item" data-view="models"><i class="bi bi-gear-wide-connected"></i>Models配置</a>
+      <a href="#" class="item" data-view="session"><i class="bi bi-clock-history"></i>Session配置</a>
+      <a href="#" class="item" data-view="gateway"><i class="bi bi-hdd-network"></i>Gateway配置</a>
+      <a href="#" class="item" data-view="editor"><i class="bi bi-code-slash"></i>JSON编辑器</a>
+    </nav>
+    <div class="sidebar-actions">
+      <button id="btnValidateSide" class="btn btn-success w-100 mb-2"><i class="bi bi-check-circle-fill"></i> 验证配置</button>
+      <button id="btnSaveSide" class="btn btn-primary w-100"><i class="bi bi-save-fill"></i> 保存配置</button>
+    </div>
+  </aside>
+
+  <section class="main">
+    <div class="toolbar">
+      <div class="d-flex gap-2 flex-wrap">
+        <button id="btnNew" class="btn btn-outline-primary"><i class="bi bi-file-earmark-plus-fill"></i> 新建</button>
+        <button id="btnOpen" class="btn btn-outline-primary"><i class="bi bi-folder2-open"></i> 打开</button>
+        <button id="btnSaveAs" class="btn btn-outline-primary"><i class="bi bi-download"></i> 另存为</button>
+        <button id="btnExport" class="btn btn-outline-primary"><i class="bi bi-file-earmark-arrow-down"></i> 导出</button>
+        <button id="btnDetectModel" class="btn btn-outline-secondary"><i class="bi bi-magic"></i> 工具</button>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge text-bg-primary">JSON5 格式支持</span>
+        <span id="syncState" class="badge text-bg-success">已同步</span>
+        <div class="form-check form-switch mb-0">
+          <input class="form-check-input" type="checkbox" id="autoSyncSwitch" checked>
+          <label class="form-check-label" for="autoSyncSwitch">编辑器自动同步</label>
+        </div>
+        <div class="form-check form-switch mb-0">
+          <input class="form-check-input" type="checkbox" id="autoValidateSwitch" checked>
+          <label class="form-check-label" for="autoValidateSwitch">自动验证</label>
+        </div>
+        <select id="recentFilesSelect" class="form-select form-select-sm" style="width:230px;">
+          <option value="">最近文件（点击恢复）</option>
+        </select>
+        <button id="btnDark" class="btn btn-sm btn-outline-dark"><i class="bi bi-moon-stars-fill"></i></button>
+      </div>
+    </div>
+
+    <div class="main-content">
+      <div class="card-shell form-wrap active" id="formWrap">
+        <div class="section-title" id="formTitle"><i class="bi bi-braces-asterisk"></i> Agents智能体配置</div>
+        <hr>
+        <div class="row g-3 form-section active" id="section-agents">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">主模型 (primary) *</label>
+            <input id="modelPrimary" class="form-control" placeholder="anthropic/claude-opus-4-5">
+            <div class="help-text">格式: 提供商/模型名称</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">备用模型 (fallbacks)</label>
+            <textarea id="modelFallbacks" rows="3" class="form-control" placeholder="openai/gpt-5.2\ngoogle/gemini-2.0"></textarea>
+            <div class="help-text">每行一个备用模型</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">工作空间 (workspace) *</label>
+            <input id="workspace" class="form-control" placeholder="~/.openclaw/workspace">
+            <div class="help-text">智能体工作目录路径</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">默认思考深度 (thinkingDefault)</label>
+            <select id="thinkingDefault" class="form-select">
+              <option value="low">低 (low)</option>
+              <option value="medium">中 (medium)</option>
+              <option value="high" selected>高 (high)</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Meta 版本</label>
+            <input id="metaVersion" class="form-control" placeholder="2026.3.13">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Wizard 最后命令</label>
+            <input id="wizardCommand" class="form-control" placeholder="onboard">
+          </div>
+        </div>
+
+        <div class="row g-3 form-section" id="section-channels" style="display:none;">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Telegram Token</label>
+            <input id="tgToken" class="form-control" placeholder="123456:ABCDEF...">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Telegram Chat ID</label>
+            <input id="tgChatId" class="form-control" placeholder="-100xxxxxxxxxx">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Discord Webhook</label>
+            <input id="discordWebhook" class="form-control" placeholder="https://discord.com/api/webhooks/...">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">WhatsApp API URL</label>
+            <input id="waApiUrl" class="form-control" placeholder="https://api.whatsapp.example/send">
+          </div>
+        </div>
+
+        <div class="row g-3 form-section" id="section-models" style="display:none;">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">模型 provider</label>
+            <input id="modelProvider" class="form-control" placeholder="anthropic/openai/google">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">自动检测模型</label>
+            <div class="input-group">
+              <input id="detectedModelPreview" class="form-control" placeholder="点击上方工具按钮检测" readonly>
+              <span class="input-group-text">只读</span>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">models.mode</label>
+            <select id="modelsMode" class="form-select">
+              <option value="merge">merge</option>
+              <option value="replace">replace</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">主路由模型 (list.main.model)</label>
+            <input id="routeMainModel" class="form-control" placeholder="custom-provider/qwen3.5-plus">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">自定义 Provider ID</label>
+            <input id="providerId" class="form-control" placeholder="custom-dashscope-aliyuncs-com">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Provider baseUrl</label>
+            <input id="providerBaseUrl" class="form-control" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1">
+          </div>
+        </div>
+
+        <div class="row g-3 form-section" id="section-session" style="display:none;">
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">超时时间 (timeoutSeconds)</label>
+            <input id="timeoutSeconds" type="number" class="form-control" min="10" max="3600" value="600">
+            <div class="help-text">单个请求超时时间 (10-3600秒)</div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">最大并发数 (maxConcurrent)</label>
+            <input id="maxConcurrent" type="number" class="form-control" min="1" max="64" value="3">
+            <div class="help-text">同时处理的最大请求数</div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">温度参数 (temperature)</label>
+            <input id="temperature" type="number" class="form-control" min="0" max="2" step="0.1" value="0.7">
+            <div class="help-text">模型创造力参数 (0.0-2.0)</div>
+          </div>
+        </div>
+
+        <div class="row g-3 form-section" id="section-gateway" style="display:none;">
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Gateway 端口</label>
+            <input id="gatewayPort" type="number" class="form-control" placeholder="18789">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Gateway 模式</label>
+            <input id="gatewayMode" class="form-control" placeholder="local">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Gateway 绑定</label>
+            <input id="gatewayBind" class="form-control" placeholder="lan">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Gateway Base URL</label>
+            <input id="gatewayBaseUrl" class="form-control" placeholder="http://127.0.0.1:11434/v1">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Gateway API Key</label>
+            <input id="gatewayApiKey" class="form-control" placeholder="sk-...">
+          </div>
+          <div class="col-md-12">
+            <label class="form-label fw-semibold">CORS allowOrigins（每行一个）</label>
+            <textarea id="corsOrigins" rows="3" class="form-control" placeholder="http://localhost:3000\nhttp://127.0.0.1:5173"></textarea>
+          </div>
+          <div class="col-md-12">
+            <label class="form-label fw-semibold">Gateway Token (auth.token)</label>
+            <input id="gatewayToken" class="form-control" placeholder="token...">
+          </div>
+        </div>
+      </div>
+
+      <div class="card-shell editor-wrap" id="editorWrap">
+        <div class="section-title"><i class="bi bi-code-square"></i> JSON5 编辑器</div>
+        <textarea id="jsonEditor"></textarea>
+        <div class="help-text mt-2">支持注释、尾逗号、拖拽打开、Ctrl+S 快捷保存。</div>
+      </div>
+
+      <div class="validate-panel mt-3">
+        <div class="fw-semibold"><i class="bi bi-patch-check-fill"></i> 验证结果</div>
+        <div id="validateStatus" class="fw-semibold mt-1">编辑器已就绪</div>
+        <pre id="validateOutput" class="small mb-0"></pre>
+      </div>
+    </div>
+  </section>
+</div>
+
+<input id="fileInput" type="file" accept=".json,.json5" style="display:none" />
+
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/mode/javascript/javascript.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/json5@2.2.3/dist/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ajv@8.17.1/dist/ajv7.min.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const fields = [
+    'modelPrimary', 'modelFallbacks', 'workspace', 'thinkingDefault',
+    'timeoutSeconds', 'maxConcurrent', 'temperature',
+    'tgToken', 'tgChatId', 'discordWebhook', 'waApiUrl',
+    'gatewayBaseUrl', 'gatewayApiKey', 'corsOrigins', 'modelProvider',
+    'modelsMode', 'routeMainModel', 'providerId', 'providerBaseUrl',
+    'metaVersion', 'wizardCommand', 'gatewayPort', 'gatewayMode', 'gatewayBind', 'gatewayToken'
+  ];
+
+  const defaultConfig = {
+    meta: {
+      lastTouchedVersion: '2026.3.13',
+      lastTouchedAt: new Date().toISOString()
+    },
+    wizard: {
+      lastRunAt: new Date().toISOString(),
+      lastRunVersion: '2026.3.13',
+      lastRunCommand: 'onboard',
+      lastRunMode: 'local'
+    },
+    agents: {
+      primary: 'anthropic/claude-opus-4-5',
+      provider: 'anthropic',
+      fallbacks: ['openai/gpt-5.2', 'google/gemini-2.0'],
+      workspace: '~/.openclaw/workspace',
+      thinkingDefault: 'high',
+      timeoutSeconds: 600,
+      maxConcurrent: 3,
+      temperature: 0.7
+    },
+    channels: {
+      telegram: { token: '', chatId: '' },
+      discord: { webhook: '' },
+      whatsapp: { apiUrl: '' }
+    },
+    models: {
+      mode: 'merge',
+      providers: {}
+    },
+    list: [{ id: 'main', model: 'anthropic/claude-opus-4-5' }],
+    gateway: {
+      port: 18789,
+      mode: 'local',
+      bind: 'lan',
+      baseUrl: 'http://127.0.0.1:11434/v1',
+      apiKey: '',
+      cors: { allowOrigins: ['http://localhost:3000'] },
+      auth: { mode: 'token', token: '' }
+    },
+    session: { dmScope: 'per-channel-peer' },
+    tools: { profile: 'coding' }
+  };
+
+  const state = {
+    config: structuredClone(defaultConfig),
+    autoValidate: true,
+    autoSync: true,
+    lockForm: false,
+    recentFiles: JSON.parse(localStorage.getItem('openclaw_recent_files') || '[]'),
+    editorSyncTimer: null,
+    lockEditorEvent: false
+  };
+
+  function setSyncState(text, ok = true) {
+    const el = $('syncState');
+    el.textContent = text;
+    el.className = `badge ${ok ? 'text-bg-success' : 'text-bg-warning'}`;
+  }
+
+  const schema = {
+    type: 'object',
+    required: ['agents', 'channels', 'gateway'],
+    properties: {
+      agents: {
+        type: 'object',
+        required: ['primary', 'workspace', 'thinkingDefault', 'timeoutSeconds', 'maxConcurrent', 'temperature'],
+        properties: {
+          primary: { type: 'string', minLength: 3, pattern: '.+\/.+' },
+          fallbacks: { type: 'array', items: { type: 'string' } },
+          workspace: { type: 'string', minLength: 1 },
+          thinkingDefault: { enum: ['low', 'medium', 'high'] },
+          timeoutSeconds: { type: 'number', minimum: 10, maximum: 3600 },
+          maxConcurrent: { type: 'number', minimum: 1, maximum: 64 },
+          temperature: { type: 'number', minimum: 0, maximum: 2 }
+        }
+      }
+    }
+  };
+
+  const ajv = window.ajv7 ? new ajv7({ allErrors: true, strict: false }) : null;
+  const validateSchema = ajv ? ajv.compile(schema) : null;
+
+  const editor = CodeMirror.fromTextArea($('jsonEditor'), {
+    mode: { name: 'javascript', json: true },
+    lineNumbers: true,
+    theme: 'default',
+    tabSize: 2,
+    indentUnit: 2,
+  });
+
+  function toText(config) {
+    return JSON.stringify(config, null, 2);
+  }
+
+  function setForm(cfg) {
+    const a = cfg.agents || {};
+    const c = cfg.channels || {};
+    const g = cfg.gateway || {};
+    const m = cfg.models || {};
+    const firstProviderId = Object.keys(m.providers || {})[0] || '';
+    const provider = firstProviderId ? m.providers[firstProviderId] : {};
+    const routeMain = Array.isArray(cfg.list) ? cfg.list.find(x => x.id === 'main') : null;
+    $('modelPrimary').value = a.primary || '';
+    $('modelProvider').value = a.provider || '';
+    $('modelFallbacks').value = (a.fallbacks || []).join('\n');
+    $('workspace').value = a.workspace || '';
+    $('thinkingDefault').value = a.thinkingDefault || 'high';
+    $('timeoutSeconds').value = a.timeoutSeconds ?? 600;
+    $('maxConcurrent').value = a.maxConcurrent ?? 3;
+    $('temperature').value = a.temperature ?? 0.7;
+    $('tgToken').value = c.telegram?.token || '';
+    $('tgChatId').value = c.telegram?.chatId || '';
+    $('discordWebhook').value = c.discord?.webhook || '';
+    $('waApiUrl').value = c.whatsapp?.apiUrl || '';
+    $('gatewayBaseUrl').value = g.baseUrl || '';
+    $('gatewayApiKey').value = g.apiKey || '';
+    $('corsOrigins').value = (g.cors?.allowOrigins || []).join('\n');
+    $('modelsMode').value = m.mode || 'merge';
+    $('routeMainModel').value = routeMain?.model || '';
+    $('providerId').value = firstProviderId;
+    $('providerBaseUrl').value = provider.baseUrl || '';
+    $('metaVersion').value = cfg.meta?.lastTouchedVersion || '';
+    $('wizardCommand').value = cfg.wizard?.lastRunCommand || '';
+    $('gatewayPort').value = g.port ?? '';
+    $('gatewayMode').value = g.mode || '';
+    $('gatewayBind').value = g.bind || '';
+    $('gatewayToken').value = g.auth?.token || '';
+  }
+
+  function buildFromForm() {
+    if (state.lockForm) return;
+    const f = $('modelFallbacks').value
+      .split('\n')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    state.config.agents = {
+      ...(state.config.agents || {}),
+      primary: $('modelPrimary').value.trim(),
+      provider: $('modelProvider').value.trim() || $('modelPrimary').value.trim().split('/')[0] || 'custom',
+      fallbacks: f,
+      workspace: $('workspace').value.trim(),
+      thinkingDefault: $('thinkingDefault').value,
+      timeoutSeconds: Number($('timeoutSeconds').value),
+      maxConcurrent: Number($('maxConcurrent').value),
+      temperature: Number($('temperature').value),
+    };
+    state.config.channels = {
+      ...(state.config.channels || {}),
+      telegram: { ...(state.config.channels?.telegram || {}), token: $('tgToken').value.trim(), chatId: $('tgChatId').value.trim() },
+      discord: { ...(state.config.channels?.discord || {}), webhook: $('discordWebhook').value.trim() },
+      whatsapp: { ...(state.config.channels?.whatsapp || {}), apiUrl: $('waApiUrl').value.trim() },
+    };
+    state.config.gateway = {
+      ...(state.config.gateway || {}),
+      port: Number($('gatewayPort').value) || 18789,
+      mode: $('gatewayMode').value.trim() || 'local',
+      bind: $('gatewayBind').value.trim() || 'lan',
+      baseUrl: $('gatewayBaseUrl').value.trim(),
+      apiKey: $('gatewayApiKey').value.trim(),
+      cors: {
+        allowOrigins: $('corsOrigins').value.split('\n').map(s => s.trim()).filter(Boolean)
+      },
+      auth: {
+        ...(state.config.gateway?.auth || {}),
+        mode: 'token',
+        token: $('gatewayToken').value.trim()
+      }
+    };
+    state.config.meta = {
+      ...(state.config.meta || {}),
+      lastTouchedVersion: $('metaVersion').value.trim(),
+      lastTouchedAt: new Date().toISOString()
+    };
+    state.config.wizard = {
+      ...(state.config.wizard || {}),
+      lastRunCommand: $('wizardCommand').value.trim()
+    };
+    const pId = $('providerId').value.trim();
+    const pBase = $('providerBaseUrl').value.trim();
+    state.config.models = state.config.models || {};
+    state.config.models.mode = $('modelsMode').value || 'merge';
+    state.config.models.providers = state.config.models.providers || {};
+    if (pId) {
+      state.config.models.providers[pId] = {
+        ...(state.config.models.providers[pId] || {}),
+        baseUrl: pBase,
+        apiKey: state.config.models.providers[pId]?.apiKey || '',
+        api: state.config.models.providers[pId]?.api || 'openai-completions',
+        models: state.config.models.providers[pId]?.models || []
+      };
+    }
+    const route = $('routeMainModel').value.trim();
+    state.config.list = Array.isArray(state.config.list) ? state.config.list : [];
+    const mainIdx = state.config.list.findIndex(x => x.id === 'main');
+    if (mainIdx >= 0) state.config.list[mainIdx].model = route;
+    else if (route) state.config.list.push({ id: 'main', model: route });
+
+    state.lockEditorEvent = true;
+    editor.setValue(toText(state.config));
+    state.lockEditorEvent = false;
+    setSyncState('已同步', true);
+    validateConfig();
+  }
+
+  function setValidation(ok, lines) {
+    const el = $('validateStatus');
+    $('validateOutput').textContent = lines.join('\n');
+    if (ok) {
+      el.className = 'fw-semibold mt-1 status-pass';
+      el.textContent = '✅ 验证通过';
+    } else {
+      el.className = 'fw-semibold mt-1 status-fail';
+      el.textContent = '❌ 验证失败';
+    }
+  }
+
+  function customValidate(cfg) {
+    const errs = [];
+    if (!cfg?.agents?.primary?.includes('/')) errs.push('agents.primary 必须是 provider/model 格式');
+    if (!cfg?.agents?.workspace) errs.push('agents.workspace 不能为空');
+    if (!cfg?.gateway?.baseUrl?.startsWith('http')) errs.push('gateway.baseUrl 必须是 http/https URL');
+    if (cfg?.models?.mode && !['merge', 'replace'].includes(cfg.models.mode)) errs.push('models.mode 只能是 merge 或 replace');
+    return errs;
+  }
+
+  function validateConfig() {
+    const errs = customValidate(state.config);
+    if (validateSchema) {
+      const ok = validateSchema(state.config);
+      if (!ok && validateSchema.errors) {
+        validateSchema.errors.forEach(e => errs.push(`${e.instancePath || '/'} ${e.message}`));
+      }
+    }
+    setValidation(errs.length === 0, errs.length ? errs : ['配置符合 schema 与自定义规则']);
+  }
+
+  function saveFile(filename = 'openclaw.json') {
+    const blob = new Blob([editor.getValue()], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function importText(text, name = '未命名') {
+    try {
+      const parsed = JSON5.parse(text);
+      applyParsedConfig(parsed);
+      editor.setValue(toText(parsed));
+      cacheRecent(name, parsed);
+      validateConfig();
+    } catch (e) {
+      setValidation(false, ['JSON5 解析失败:', e.message]);
+    }
+  }
+
+  function cacheRecent(name, data) {
+    state.recentFiles = [{ name, data, time: new Date().toISOString() }, ...state.recentFiles.filter(x => x.name !== name)].slice(0, 8);
+    localStorage.setItem('openclaw_recent_files', JSON.stringify(state.recentFiles));
+    renderRecentFiles();
+  }
+
+  function renderRecentFiles() {
+    const sel = $('recentFilesSelect');
+    sel.innerHTML = '<option value=\"\">最近文件（点击恢复）</option>';
+    state.recentFiles.forEach((x, idx) => {
+      const op = document.createElement('option');
+      op.value = String(idx);
+      op.textContent = `${x.name} (${new Date(x.time).toLocaleString()})`;
+      sel.appendChild(op);
+    });
+  }
+
+  function applyParsedConfig(parsed) {
+    state.config = parsed;
+    state.lockForm = true;
+    setForm(parsed);
+    state.lockForm = false;
+  }
+
+  function syncFromEditor(showError = false) {
+    try {
+      const parsed = JSON5.parse(editor.getValue());
+      applyParsedConfig(parsed);
+      setSyncState('已同步', true);
+      validateConfig();
+      return true;
+    } catch (e) {
+      setSyncState('待同步（JSON 有错误）', false);
+      if (showError) {
+        setValidation(false, ['JSON5 解析失败:', e.message]);
+      }
+      return false;
+    }
+  }
+
+  async function detectModel() {
+    const base = prompt('输入网关 baseUrl（自动拼接 /models）', state.config?.gateway?.baseUrl || 'http://127.0.0.1:11434/v1');
+    if (!base) return;
+    try {
+      const resp = await fetch(base.replace(/\/$/, '') + '/models');
+      const json = await resp.json();
+      const model = json?.data?.[0]?.id || json?.models?.[0]?.name;
+      if (!model) throw new Error('没有识别到模型');
+      $('modelPrimary').value = model.includes('/') ? model : `openai/${model}`;
+      $('detectedModelPreview').value = model;
+      buildFromForm();
+      alert('检测到模型：' + model);
+    } catch (e) {
+      alert('检测失败：' + e.message);
+    }
+  }
+
+  function resetNew() {
+    state.config = structuredClone(defaultConfig);
+    $('detectedModelPreview').value = '';
+    setForm(state.config);
+    editor.setValue(toText(state.config));
+    validateConfig();
+  }
+
+  function openByFile(file) {
+    const reader = new FileReader();
+    reader.onload = () => importText(String(reader.result), file.name);
+    reader.readAsText(file, 'utf-8');
+  }
+
+  const sectionMap = {
+    form: { id: 'section-agents', title: 'Agents智能体配置' },
+    channels: { id: 'section-channels', title: 'Channels配置' },
+    models: { id: 'section-models', title: 'Models配置' },
+    session: { id: 'section-session', title: 'Session配置' },
+    gateway: { id: 'section-gateway', title: 'Gateway配置' },
+  };
+
+  function switchFormSection(view) {
+    Object.values(sectionMap).forEach(({ id }) => {
+      const el = $(id);
+      if (el) el.style.display = 'none';
+    });
+    const item = sectionMap[view] || sectionMap.form;
+    $(item.id).style.display = '';
+    $('formTitle').innerHTML = `<i class=\"bi bi-braces-asterisk\"></i> ${item.title}`;
+  }
+
+  document.querySelectorAll('.menu .item').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      document.querySelectorAll('.menu .item').forEach(a => a.classList.remove('active'));
+      el.classList.add('active');
+      const view = el.dataset.view;
+      const showEditor = view === 'editor';
+      if (!showEditor) syncFromEditor(true);
+      $('formWrap').classList.toggle('active', !showEditor);
+      $('editorWrap').classList.toggle('active', showEditor);
+      if (!showEditor) switchFormSection(view);
+    });
+  });
+
+  fields.forEach(id => {
+    $(id).addEventListener('input', buildFromForm);
+    $(id).addEventListener('change', buildFromForm);
+  });
+
+  editor.on('change', () => {
+    if (state.lockEditorEvent) return;
+    if (state.editorSyncTimer) clearTimeout(state.editorSyncTimer);
+    setSyncState('同步中…', false);
+    state.editorSyncTimer = setTimeout(() => {
+      if (state.autoSync) syncFromEditor(state.autoValidate);
+      else setSyncState('已暂停自动同步', false);
+    }, 180);
+  });
+
+  $('btnValidateSide').addEventListener('click', validateConfig);
+  $('btnSaveSide').addEventListener('click', () => saveFile('openclaw.json'));
+  $('btnOpen').addEventListener('click', () => $('fileInput').click());
+  $('btnNew').addEventListener('click', resetNew);
+  $('btnSaveAs').addEventListener('click', () => {
+    const n = prompt('另存为文件名', 'openclaw.json');
+    if (n) saveFile(n);
+  });
+  $('btnExport').addEventListener('click', () => saveFile('openclaw.json'));
+  $('btnDetectModel').addEventListener('click', detectModel);
+  $('autoValidateSwitch').addEventListener('change', (e) => state.autoValidate = e.target.checked);
+  $('autoSyncSwitch').addEventListener('change', (e) => {
+    state.autoSync = e.target.checked;
+    if (!state.autoSync) setSyncState('已暂停自动同步', false);
+    else syncFromEditor(false);
+  });
+  $('recentFilesSelect').addEventListener('change', (e) => {
+    if (!e.target.value) return;
+    const pick = state.recentFiles[Number(e.target.value)];
+    if (!pick) return;
+    applyParsedConfig(pick.data);
+    state.lockEditorEvent = true;
+    editor.setValue(toText(pick.data));
+    state.lockEditorEvent = false;
+    validateConfig();
+    setSyncState('已从最近文件恢复', true);
+  });
+  $('btnDark').addEventListener('click', () => {
+    document.body.classList.toggle('dark');
+    const dark = document.body.classList.contains('dark');
+    editor.setOption('theme', dark ? 'material-darker' : 'default');
+    localStorage.setItem('openclaw_dark', dark ? '1' : '0');
+  });
+
+  $('fileInput').addEventListener('change', (e) => {
+    const f = e.target.files?.[0];
+    if (f) openByFile(f);
+  });
+
+  ['dragenter', 'dragover'].forEach(evt => document.addEventListener(evt, (e) => e.preventDefault()));
+  document.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const f = e.dataTransfer?.files?.[0];
+    if (f) openByFile(f);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      saveFile('openclaw.json');
+    }
+  });
+
+  if (localStorage.getItem('openclaw_dark') === '1') {
+    document.body.classList.add('dark');
+    editor.setOption('theme', 'material-darker');
+  }
+
+  setForm(state.config);
+  switchFormSection('form');
+  editor.setValue(toText(state.config));
+  renderRecentFiles();
+  setSyncState('已同步', true);
+  validateConfig();
+  setInterval(() => state.autoValidate && validateConfig(), 2000);
+})();
+</script>
+</body>
+</html>
